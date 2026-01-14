@@ -27,6 +27,14 @@
             <input type="text" id="user-input" placeholder="Pregunta algo...">
             <button onclick="sendMessage()">Enviar</button>
         </div>
+        <div style="padding: 10px; font-size: 12px; border-top: 1px solid #ccc; background: #f9f9f9;">
+            <button onclick="toggleConfig()" style="width: 100%; padding: 5px;">⚙️ Configurar Credenciales</button>
+            <div id="config-panel" style="display: none; margin-top: 10px;">
+                <input type="text" id="endpoint-input" placeholder="CHATBOT_ENDPOINT" style="width: 100%; margin-bottom: 5px; padding: 5px; box-sizing: border-box;">
+                <input type="password" id="key-input" placeholder="CHATBOT_KEY" style="width: 100%; margin-bottom: 5px; padding: 5px; box-sizing: border-box;">
+                <button onclick="saveConfig()" style="width: 100%; padding: 5px;">Guardar</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -45,12 +53,42 @@
             const loadingEl = document.querySelector('.loading');
 
             try {
-                // Llamamos a la API local que envía la pregunta al backend
-                const response = await fetch('/api/chat', {
+                // IMPORTANTE: Necesitas configurar estas variables en localStorage o como constantes
+                // Para desarrollo local: pon aquí directamente tus credenciales (NO en producción)
+                // En producción: usa variables de entorno o Azure Key Vault
+                
+                const CHATBOT_ENDPOINT = localStorage.getItem('CHATBOT_ENDPOINT') || '';
+                const CHATBOT_KEY = localStorage.getItem('CHATBOT_KEY') || '';
+                
+                if (!CHATBOT_ENDPOINT || !CHATBOT_KEY) {
+                    addMessage('Error: Configure CHATBOT_ENDPOINT y CHATBOT_KEY en localStorage.', 'bot');
+                    console.error('Missing credentials in localStorage');
+                    return;
+                }
+
+                // Llamamos directamente a Azure Cognitive Services
+                const payload = {
+                    top: 3,
+                    question: question,
+                    includeUnstructuredSources: true,
+                    confidenceScoreThreshold: 0.3,
+                    answerSpanRequest: {
+                        enable: true,
+                        topAnswersWithSpan: 1,
+                        confidenceScoreThreshold: 0.3
+                    }
+                };
+
+                const response = await fetch(CHATBOT_ENDPOINT, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: question })
+                    headers: {
+                        'Ocp-Apim-Subscription-Key': CHATBOT_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
                 });
+
+                console.log('Response status:', response.status);
 
                 // Si la respuesta no es OK, intentamos leer texto o JSON para mostrar un mensaje útil
                 if (!response.ok) {
@@ -62,12 +100,12 @@
                     } else {
                         errText = await response.text().catch(() => `Error ${response.status}`);
                     }
-                    console.error('API returned non-OK:', response.status, errText);
-                    addMessage('Error del servidor: ' + (errText || response.status), 'bot');
+                    console.error('Azure returned error:', response.status, errText);
+                    addMessage('Error: ' + (errText || response.status), 'bot');
                     return;
                 }
 
-                // Intentamos parsear JSON si existe
+                // Intentamos parsear JSON
                 const contentType = response.headers.get('content-type') || '';
                 let data;
                 
@@ -75,7 +113,7 @@
                 console.log('Response text:', responseText);
                 
                 if (!responseText) {
-                    addMessage('Respuesta vacía del servidor.', 'bot');
+                    addMessage('Respuesta vacía de Azure.', 'bot');
                     return;
                 }
                 
@@ -84,12 +122,12 @@
                         data = JSON.parse(responseText);
                     } catch (parseErr) {
                         console.error('JSON parse error:', parseErr, 'Text was:', responseText);
-                        addMessage('Error: respuesta inválida del servidor.', 'bot');
+                        addMessage('Error: respuesta inválida.', 'bot');
                         return;
                     }
                 } else {
-                    // Si el backend devolvió texto plano, lo mostramos
-                    addMessage(responseText || 'Respuesta no JSON del servidor', 'bot');
+                    // Si Azure devolvió texto plano, lo mostramos
+                    addMessage(responseText || 'Respuesta no JSON', 'bot');
                     return;
                 }
 
@@ -98,7 +136,6 @@
                 } else if (data && data.error) {
                     addMessage('Error: ' + data.error, 'bot');
                 } else if (data && data.text) {
-                    // Fallback si el backend envía { text: "..." }
                     addMessage(data.text, 'bot');
                 } else {
                     addMessage('No tengo respuesta para eso.', 'bot');
@@ -124,6 +161,32 @@
             div.textContent = text;
             messagesContainer.appendChild(div);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function toggleConfig() {
+            const panel = document.getElementById('config-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            
+            // Cargar valores actuales
+            if (panel.style.display === 'block') {
+                document.getElementById('endpoint-input').value = localStorage.getItem('CHATBOT_ENDPOINT') || '';
+                document.getElementById('key-input').value = localStorage.getItem('CHATBOT_KEY') || '';
+            }
+        }
+
+        function saveConfig() {
+            const endpoint = document.getElementById('endpoint-input').value.trim();
+            const key = document.getElementById('key-input').value.trim();
+            
+            if (!endpoint || !key) {
+                alert('Por favor completa ambos campos');
+                return;
+            }
+            
+            localStorage.setItem('CHATBOT_ENDPOINT', endpoint);
+            localStorage.setItem('CHATBOT_KEY', key);
+            alert('Credenciales guardadas correctamente');
+            toggleConfig();
         }
     </script>
 </body>

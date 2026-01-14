@@ -5,83 +5,66 @@ Chatbot que envía preguntas a Azure Cognitive Services (Language Service) de fo
 ## Cambios realizados (14/01/2026)
 
 ### Cliente (`index.html`)
-- ✅ Mejorado manejo de errores en `fetch`:
-  - Comprueba `response.ok` antes de parsear JSON.
-  - Maneja respuestas que no sean JSON (devuelve texto si es texto plano).
-  - El mensaje "Pensando..." se elimina siempre (incluso si hay error) usando bloque `finally`.
-  - Muestra mensajes de error más informativos en la UI y en consola del navegador.
+- ✅ **Nuevo enfoque**: El cliente ahora llama **directamente** a Azure Language Service (sin backend proxy).
+- ✅ Panel de configuración: Botón **⚙️ Configurar Credenciales** para introducir endpoint y clave sin editar código.
+- ✅ Credenciales guardadas en `localStorage` (navegador).
+- ✅ Manejo robusto de errores:
+  - Valida respuestas JSON.
+  - Muestra errores claros.
+  - "Pensando..." se elimina siempre.
 
 ### Servidor (`api/chat/index.js`)
-- ✅ Validación de configuración:
-  - Verifica que existan variables de entorno `CHATBOT_ENDPOINT` y `CHATBOT_KEY`.
-  - Si faltan, devuelve JSON con un mensaje de error claro.
-- ✅ Manejo robusto de errores:
-  - Para respuestas no-OK (4xx, 5xx) de Azure, devuelve JSON con `error` y `details`.
-  - **Siempre** devuelve JSON al cliente (encabezado `Content-Type: application/json`).
-  - Previene fallos de parseo en el cliente.
+- ℹ️ **Archivado** (no se usa en este enfoque). Dejado en el repo por si necesitas migrar a un backend seguro después.
+
+### Por qué este cambio
+- Azure Static Web Apps **no soporta Node.js Functions** en la carpeta `api/` de forma directa.
+- Esta solución es **más simple y rápida**: sin backend, sin CORS complicado, sin función Azure.
+- **Trade-off**: Las credenciales viajan en el cliente (localStorage). Para producción, considera un backend proxy seguro.
 
 ## Configuración en Azure
 
-### 1. Variables de entorno (Configuración de Azure App)
-En **Azure Portal**, ve a tu **Function App** > **Configuración** > **Configuración de la aplicación** y añade dos nuevas variables:
+### 1. Credenciales de Azure Language Service
+Necesitas tener:
+- **CHATBOT_ENDPOINT**: URL completa de tu Language Service (QnA Maker o similar)
+  - Ejemplo: `https://<region>.api.cognitive.microsoft.com/language/:query-knowledgebases/<kb-id>/generateAnswer`
+- **CHATBOT_KEY**: Clave API de acceso
 
-| Nombre | Valor | Descripción |
-|--------|-------|-------------|
-| `CHATBOT_ENDPOINT` | `https://<tu-region>.api.cognitive.microsoft.com/language/:query-knowledgebases/<kb-id>/generateAnswer` | URL del endpoint de tu Language Service (QnA Maker o similar) |
-| `CHATBOT_KEY` | `<tu-clave-api>` | Clave API de acceso al Language Service |
+### 2. En la aplicación
+1. Abre el chat en tu Static Web App.
+2. Haz clic en el botón **⚙️ Configurar Credenciales** (abajo).
+3. Pega tu `CHATBOT_ENDPOINT` y `CHATBOT_KEY`.
+4. Haz clic en **Guardar** (se guarda en localStorage del navegador).
+5. Ahora puedes hacer preguntas.
 
-⚠️ **Nota**: No incluyas estas claves en el repositorio. Úsalas solo en Azure Portal.
-
-### 2. CORS (si es necesario)
-Si tu frontend está alojado en un dominio diferente a la Function App:
-1. En **Configuración** > **CORS**
-2. Añade el dominio de origen de tu frontend (ej: `https://miapp.azurewebsites.net`)
-3. O usa `*` si quieres permitir cualquier origen (menos seguro, úsalo solo para desarrollo)
+⚠️ **Nota sobre seguridad**: Las credenciales se guardan en localStorage del navegador. **NO uses esto en producción sin protecciones adicionales** (como autenticación, encriptación, o un backend proxy). Para producción, implementa un backend seguro que maneje las credenciales.
 
 ## Cómo probar
 
 ### En Azure (tu caso actual)
-1. Despliega los cambios en tu Function App.
-2. Abre `index.html` desde tu dominio Azure o desde donde esté alojado.
-3. Escribe una pregunta en el chat.
-4. Si todo está bien:
-   - Desaparece "Pensando..." y aparece la respuesta de Azure.
-5. Si hay error:
-   - Desaparece "Pensando..." y aparece un mensaje como "Error del servidor: ..." o "Configuración del servidor incompleta".
-   - Abre la consola del navegador (`F12` > **Console**) para ver más detalles en `console.error()`.
+1. Despliega los cambios en tu Static Web App (push a GitHub).
+2. Abre `https://polite-hill-05823e03.1.azurewebsites.net/` en tu navegador.
+3. Haz clic en **⚙️ Configurar Credenciales**.
+4. Pega tu:
+   - `CHATBOT_ENDPOINT` (URL completa del Language Service)
+   - `CHATBOT_KEY` (tu clave API)
+5. Haz clic en **Guardar**.
+6. Escribe una pregunta y presiona **Enviar**.
+7. Si todo está correcto:
+   - Desaparece "Pensando..." y aparece la respuesta.
+8. Si hay error:
+   - Aparece el mensaje de error.
+   - Abre consola (`F12` > **Console**) para ver detalles.
 
 ### Localmente (opcional, para desarrollo)
 
 #### Requisitos
-- Node.js 18+ 
-- Azure Functions Core Tools (`func` comando)
+- Navegador moderno (Chrome, Firefox, Edge, Safari)
 
 #### Pasos
-1. Crea un archivo `local.settings.json` en la raíz del proyecto (NO lo commits):
-   ```json
-   {
-     "IsEncrypted": false,
-     "Values": {
-       "FUNCTIONS_WORKER_RUNTIME": "node",
-       "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-       "CHATBOT_ENDPOINT": "https://<tu-region>.api.cognitive.microsoft.com/language/:query-knowledgebases/<kb-id>/generateAnswer",
-       "CHATBOT_KEY": "<tu-clave-api>"
-     }
-   }
-   ```
-
-2. Inicia el runtime de Functions:
-   ```powershell
-   func start
-   ```
-
-3. En otra terminal, sirve `index.html` con un servidor estático:
-   ```powershell
-   npm install -g http-server  # si no lo tienes
-   http-server . -p 8080
-   ```
-
-4. Abre `http://localhost:8080` en tu navegador y prueba.
+1. Abre `index.html` en tu navegador (puedes arrastrar el archivo o usar un servidor local).
+2. Haz clic en **⚙️ Configurar Credenciales**.
+3. Pega tu `CHATBOT_ENDPOINT` y `CHATBOT_KEY`.
+4. Guarda y prueba.
 
 ## Estructura del proyecto
 

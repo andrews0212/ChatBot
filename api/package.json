@@ -1,0 +1,10 @@
+{
+  "name": "chatbot-api",
+  "version": "1.0.0",
+  "description": "Chat API for Azure Static Web Apps",
+  "main": "chat/index.js",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {}
+}

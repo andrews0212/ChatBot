@@ -84,10 +84,11 @@ module.exports = async function (context, req) {
         };
 
     } catch (error) {
-        context.log.error(error);
+        context.log.error('Catch error:', error.message || error);
         context.res = {
             status: 500,
-            body: "Error interno al conectar con el bot."
+            headers: { 'Content-Type': 'application/json' },
+            body: { error: 'Error interno al conectar con el bot.', message: error.message || error }
         };
     }
 }

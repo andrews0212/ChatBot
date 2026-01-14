@@ -70,12 +70,26 @@
                 // Intentamos parsear JSON si existe
                 const contentType = response.headers.get('content-type') || '';
                 let data;
+                
+                const responseText = await response.text();
+                console.log('Response text:', responseText);
+                
+                if (!responseText) {
+                    addMessage('Respuesta vacía del servidor.', 'bot');
+                    return;
+                }
+                
                 if (contentType.includes('application/json')) {
-                    data = await response.json();
+                    try {
+                        data = JSON.parse(responseText);
+                    } catch (parseErr) {
+                        console.error('JSON parse error:', parseErr, 'Text was:', responseText);
+                        addMessage('Error: respuesta inválida del servidor.', 'bot');
+                        return;
+                    }
                 } else {
                     // Si el backend devolvió texto plano, lo mostramos
-                    const text = await response.text();
-                    addMessage(text || 'Respuesta no JSON del servidor', 'bot');
+                    addMessage(responseText || 'Respuesta no JSON del servidor', 'bot');
                     return;
                 }
 
@@ -83,6 +97,9 @@
                     addMessage(data.answers[0].answer, 'bot');
                 } else if (data && data.error) {
                     addMessage('Error: ' + data.error, 'bot');
+                } else if (data && data.text) {
+                    // Fallback si el backend envía { text: "..." }
+                    addMessage(data.text, 'bot');
                 } else {
                     addMessage('No tengo respuesta para eso.', 'bot');
                 }

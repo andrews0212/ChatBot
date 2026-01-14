@@ -1,5 +1,7 @@
 // Necesitas Node.js 18+ para usar 'fetch' nativo, que es el estándar en Azure hoy día.
 module.exports = async function (context, req) {
+    context.log('Chat function called with method:', req.method, 'Body:', req.body);
+    
     // 1. Obtener la pregunta del frontend
     const question = req.body && req.body.question;
 

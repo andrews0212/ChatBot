@@ -1,0 +1,18 @@
+{
+  "routes": [
+    {
+      "route": "/api/*",
+      "allowedRoles": ["anonymous"],
+      "methods": ["POST", "GET", "PUT", "DELETE", "PATCH"]
+    },
+    {
+      "route": "/*",
+      "rewrite": "/index.html",
+      "statusCode": 200
+    }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/api/*", "*.{json,jpg,gif,png,svg,css,js,ico,xml}"]
+  }
+}

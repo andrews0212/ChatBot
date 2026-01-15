@@ -114,17 +114,23 @@
         document.getElementById("loader").style.display = 'block';
 
         try {
-            // Enviamos solo la pregunta a nuestra API
-            const response = await fetch(API_URL, {
+            const response = await fetch("/api/preguntar", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ question: question })
             });
 
-            if (!response.ok) throw new Error(`Error: ${response.status}`);
+            // Intentamos leer la respuesta como texto primero para evitar el error de JSON
+            const textResponse = await response.text();
+            
+            if (!response.ok) {
+                console.error("Error del servidor:", textResponse);
+                throw new Error(`Error ${response.status}: ${textResponse}`);
+            }
 
-            const data = await response.json();
-            let botAnswer = "Lo siento, no encontré esa receta.";
+            // Si llegamos aquí, parseamos el JSON seguro
+            const data = JSON.parse(textResponse);
+            let botAnswer = "Lo siento, no entendí bien.";
 
             if (data.answers && data.answers.length > 0) {
                 botAnswer = data.answers[0].answer;
@@ -132,8 +138,8 @@
             addMessage(botAnswer, 'bot');
 
         } catch (error) {
-            console.error(error);
-            addMessage("Error conectando con el chef.", 'bot');
+            console.error("Detalle del error:", error);
+            addMessage("Hubo un problema al conectar. Revisa la consola (F12) para más detalles.", 'bot');
         } finally {
             document.getElementById("loader").style.display = 'none';
         }

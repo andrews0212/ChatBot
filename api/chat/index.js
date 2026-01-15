@@ -1,96 +1,59 @@
-// Necesitas Node.js 18+ para usar 'fetch' nativo, que es el estándar en Azure hoy día.
+const axios = require('axios');
+
 module.exports = async function (context, req) {
-    context.log('Chat function called with method:', req.method, 'Body:', req.body);
-    
-    // 1. Obtener la pregunta del frontend
-    const question = req.body && req.body.question;
+    context.log('Procesando mensaje del chat...');
 
-    if (!question) {
-        context.res = { status: 400, body: "Por favor envía una pregunta." };
+    // 1. Obtener variables de entorno (Configuradas en Azure o local.settings.json)
+    const endpoint = process.env.LANGUAGE_ENDPOINT; // Ej: https://mi-recurso.cognitiveservices.azure.com/
+    const apiKey = process.env.LANGUAGE_API_KEY;
+    const projectName = process.env.PROJECT_NAME;
+    const deploymentName = process.env.DEPLOYMENT_NAME || 'production';
+
+    // 2. Validar entrada
+    const userMessage = req.body && req.body.message;
+    if (!userMessage) {
+        context.res = { status: 400, body: "Por favor envía un mensaje en el cuerpo del JSON." };
         return;
     }
-
-    // 2. Obtener las credenciales desde las Variables de Entorno (Configuración de Azure)
-    // NO PONEMOS LA CLAVE AQUÍ DIRECTAMENTE
-    const AZURE_ENDPOINT = process.env.CHATBOT_ENDPOINT;
-    const AZURE_KEY = process.env.CHATBOT_KEY;
-
-    // Validaciones mínimas: devolver JSON claro si falta configuración
-    if (!AZURE_ENDPOINT || !AZURE_KEY) {
-        context.log.error('Faltan variables de entorno: CHATBOT_ENDPOINT o CHATBOT_KEY');
-        context.res = {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-            body: { error: 'Configuración del servidor incompleta. Configure CHATBOT_ENDPOINT y CHATBOT_KEY.' }
-        };
-        return;
-    }
-
-    // Configuración del cuerpo para Azure Language Service
-    const payload = {
-        top: 3,
-        question: question,
-        includeUnstructuredSources: true,
-        confidenceScoreThreshold: 0.3,
-        answerSpanRequest: {
-            enable: true,
-            topAnswersWithSpan: 1,
-            confidenceScoreThreshold: 0.3
-        }
-    };
 
     try {
-        // 3. Llamar a Azure Cognitive Services
-        const response = await fetch(AZURE_ENDPOINT, {
-            method: 'POST',
+        // 3. Configurar la petición a Azure Question Answering
+        // Documentación: https://learn.microsoft.com/en-us/rest/api/language/question-answering/query-knowledgebases
+        const apiUrl = `${endpoint}language/:query-knowledgebases?projectName=${projectName}&api-version=2021-10-01&deploymentName=${deploymentName}`;
+
+        const payload = {
+            question: userMessage,
+            top: 1, // Número de respuestas a devolver
+            confidenceScoreThreshold: 0.3 // Mínima confianza para responder
+        };
+
+        // 4. Enviar petición a Azure
+        const response = await axios.post(apiUrl, payload, {
             headers: {
-                'Ocp-Apim-Subscription-Key': AZURE_KEY,
+                'Ocp-Apim-Subscription-Key': apiKey,
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
+            }
         });
 
-        const contentType = response.headers.get('content-type') || '';
+        // 5. Extraer la mejor respuesta
+        const answers = response.data.answers;
+        let botReply = "Lo siento, no encontré una receta para eso.";
 
-        if (!response.ok) {
-            // Intentamos leer cuerpo de error (JSON o texto)
-            let errBody = null;
-            if (contentType.includes('application/json')) {
-                errBody = await response.json().catch(() => null);
-            } else {
-                errBody = await response.text().catch(() => `Status ${response.status}`);
-            }
-            context.log.error('Azure error', response.status, errBody);
-            context.res = {
-                status: response.status || 500,
-                headers: { 'Content-Type': 'application/json' },
-                body: { error: 'Error al conectar con el servicio de Azure.', details: errBody }
-            };
-            return;
+        if (answers && answers.length > 0 && answers[0].answer) {
+            botReply = answers[0].answer;
         }
 
-        // Parseamos la respuesta de Azure según su content-type
-        let data;
-        if (contentType.includes('application/json')) {
-            data = await response.json();
-        } else {
-            const text = await response.text().catch(() => 'Respuesta no JSON de Azure');
-            // Normalizamos la salida para que el frontend siempre reciba JSON
-            data = { text: text };
-        }
-
-        // 4. Devolver la respuesta al Frontend (siempre JSON)
+        // 6. Responder al Frontend
         context.res = {
-            headers: { 'Content-Type': 'application/json' },
-            body: data
+            status: 200,
+            body: { reply: botReply }
         };
 
     } catch (error) {
-        context.log.error('Catch error:', error.message || error);
+        context.log.error("Error en la API de Azure:", error.message);
         context.res = {
             status: 500,
-            headers: { 'Content-Type': 'application/json' },
-            body: { error: 'Error interno al conectar con el bot.', message: error.message || error }
+            body: { reply: "Hubo un error interno conectando con el cerebro del bot." }
         };
     }
 }

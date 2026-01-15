@@ -48,9 +48,10 @@
 
         try {
             // Llamamos a nuestra propia API /api/preguntar
-            const response = await fetch(API_URL, {
+            // SI VES ESTO, ESTÁS EN LA VERSIÓN CORRECTA:
+            const response = await fetch("/api/preguntar", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json" }, // Sin keys aquí
                 body: JSON.stringify({ question: question })
             });
 

@@ -22,8 +22,21 @@ jobs:
         with:
           submodules: true
           lfs: false
+
+      # ---------------------------------------------------------
+      # NUEVO PASO AÑADIDO: INYECTAR SECRETOS
+      # Esto cambia los textos __ENV...__ por las claves reales antes de subir
+      # ---------------------------------------------------------
+      - name: Inject Secrets into HTML
+        run: |
+          # Atención: Asumo que index.html está dentro de la carpeta 'src'
+          # Si está en la raíz, quita 'src/' de la ruta abajo.
+          sed -i "s|__ENV_CHATBOT_ENDPOINT__|${{ secrets.CHATBOT_ENDPOINT }}|g" src/index.html
+          sed -i "s|__ENV_CHATBOT_KEY__|${{ secrets.CHATBOT_KEY }}|g" src/index.html
+
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
+
       - name: Get Id Token
         uses: actions/github-script@v6
         id: idtoken
@@ -32,17 +45,17 @@ jobs:
                const coredemo = require('@actions/core')
                return await coredemo.getIDToken()
            result-encoding: string
+
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_LIVELY_FLOWER_0438C6203 }}
           action: "upload"
-          ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
-          # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "./src" # App source code path
-          api_location: "" # Api source code path - optional
-          output_location: "." # Built app content directory - optional
+          ###### Repository/Build Configurations ######
+          app_location: "./src" # 👈 Asegúrate de que tu index.html está en esta carpeta
+          api_location: "" 
+          output_location: "." 
           github_id_token: ${{ steps.idtoken.outputs.result }}
           ###### End of Repository/Build Configurations ######
 

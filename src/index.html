@@ -4,21 +4,104 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chatbot de Recetas</title>
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .chat-container { width: 400px; background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; height: 600px; }
+        .chat-header { background: #0078d4; color: white; padding: 15px; text-align: center; font-weight: bold; }
+        .chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .message { padding: 10px; border-radius: 10px; max-width: 80%; font-size: 14px; line-height: 1.4; }
+        .bot { background: #e1f0fa; align-self: flex-start; color: #000; }
+        .user { background: #0078d4; align-self: flex-end; color: white; }
+        .input-area { display: flex; padding: 10px; border-top: 1px solid #ddd; }
+        input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; outline: none; }
+        button { margin-left: 10px; padding: 10px 15px; background: #0078d4; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #005a9e; }
+        .loading { font-style: italic; color: #888; font-size: 12px; margin-left: 10px; display: none; }
+    </style>
 </head>
 <body>
-    <div class="chat-container">
-        <header>
-            <h1>👨‍🍳 Chef Bot</h1>
-        </header>
-        <div id="chat-history" class="chat-history">
-            <div class="message bot">¡Hola! Pregúntame por una receta.</div>
-        </div>
-        <div class="chat-input">
-            <input type="text" id="user-input" placeholder="Ej: ¿Cómo hago una tortilla?" />
-            <button onclick="sendMessage()">Enviar</button>
-        </div>
+
+<div class="chat-container">
+    <div class="chat-header">👨‍🍳 Chatbot de Recetas</div>
+    <div class="chat-messages" id="messages">
+        <div class="message bot">¡Hola! Soy tu asistente de cocina. ¿Qué receta buscas hoy?</div>
     </div>
-    <script src="script.js"></script>
+    <div class="loading" id="loader">Consultando al chef...</div>
+    <div class="input-area">
+        <input type="text" id="userInput" placeholder="Pregunta sobre una receta..." onkeypress="handleEnter(event)">
+        <button onclick="sendMessage()">Enviar</button>
+    </div>
+</div>
+
+<script>
+    // ----------------------------------------------------
+    // MARCADORES PARA SUSTITUCIÓN DESDE GITHUB ACTIONS
+    // ----------------------------------------------------
+    const ENDPOINT = "__ENV_CHATBOT_ENDPOINT__";
+    const API_KEY = "__ENV_CHATBOT_KEY__";
+    // ----------------------------------------------------
+
+    async function sendMessage() {
+        const inputField = document.getElementById("userInput");
+        const question = inputField.value.trim();
+        if (!question) return;
+
+        addMessage(question, 'user');
+        inputField.value = '';
+        document.getElementById("loader").style.display = 'block';
+
+        try {
+            const payload = {
+                top: 3,
+                question: question,
+                includeUnstructuredSources: true,
+                confidenceScoreThreshold: 0.1,
+                answerSpanRequest: {
+                    enable: true,
+                    topAnswersWithSpan: 1,
+                    confidenceScoreThreshold: 0.1
+                }
+            };
+
+            const response = await fetch(ENDPOINT, {
+                method: "POST",
+                headers: {
+                    "Ocp-Apim-Subscription-Key": API_KEY,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error(`Error: ${response.status}`);
+
+            const data = await response.json();
+            let botAnswer = "Lo siento, no encontré esa receta.";
+
+            if (data.answers && data.answers.length > 0) {
+                botAnswer = data.answers[0].answer;
+            }
+
+            addMessage(botAnswer, 'bot');
+
+        } catch (error) {
+            console.error(error);
+            addMessage("Error conectando con el servicio de recetas.", 'bot');
+        } finally {
+            document.getElementById("loader").style.display = 'none';
+        }
+    }
+
+    function addMessage(text, sender) {
+        const messagesDiv = document.getElementById("messages");
+        const msgDiv = document.createElement("div");
+        msgDiv.classList.add("message", sender);
+        msgDiv.textContent = text;
+        messagesDiv.appendChild(msgDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function handleEnter(e) { if (e.key === 'Enter') sendMessage(); }
+</script>
+
 </body>
 </html>
